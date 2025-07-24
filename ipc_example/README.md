@@ -9,7 +9,7 @@ process1: ./example
 process2: ./example 0
 
 Expectation:
- 
+```
  time  process1                          process2 
   |      |                                  x
   |    allocate memory                      x
@@ -37,3 +37,4 @@ Expectation:
   |      |
   |      x
   V                                         
+```
