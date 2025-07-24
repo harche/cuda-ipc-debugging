@@ -1,0 +1,93 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+    name: cuda-ipc-debug
+    annotations:
+      leaderworkerset.sigs.k8s.io/subgroup-exclusive-topology: kubernetes.io/hostname
+spec:
+    replicas: 1
+    leaderWorkerTemplate:
+        subGroupPolicy:
+          subGroupSize: 2
+        size: 2
+        restartPolicy: RecreateGroupOnPodRestart
+
+        workerTemplate:
+            spec:
+              hostIPC: true
+              hostPID: true
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                      - matchExpressions:
+                          - key: gpu.nvidia.com/model
+                            operator: In
+                            values:
+                              - H200
+
+              containers:
+              - name: cuda-ipc-worker 
+                image: "ghcr.io/coreweave/nccl-tests:12.9.1-devel-ubuntu22.04-nccl2.27.6-1-1fadb07"
+                imagePullPolicy: Always
+                workingDir: /code
+                stdin: true
+                tty: true
+                command: ["/bin/sh","-c"]
+                args:
+                  - |
+                    echo "Pod starting and sleeping ..."
+                    sleep infinity
+                env:
+                  # Needed for GDRCOPY to be used.
+                  # See: https://github.com/NVIDIA/nvidia-container-toolkit/releases/tag/v1.15.0
+                  - name: NVIDIA_GDRCOPY
+                    value: "enabled"
+                  - name: NVSHMEM_DEBUG
+                    value: "INFO"
+                  - name: NVSHMEM_REMOTE_TRANSPORT
+                    value: "ibgda"
+                  - name: NVSHMEM_IB_ENABLE_IBGDA
+                    value: "true"
+                  - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                    value: "eth0"
+                  - name: GLOO_SOCKET_IFNAME
+                    value: "eth0"
+                  - name: NCCL_SOCKET_IFNAME
+                    value: "eth0"
+                  - name: NCCL_IB_HCA
+                    value: "ibp"
+
+                securityContext:
+                  privileged : true
+                  capabilities:
+                    add: 
+                    - "IPC_LOCK"
+                    - "SYS_RAWIO"
+                resources:
+                  limits:
+                    memory: 512Gi
+                    ephemeral-storage: 64Gi
+                    nvidia.com/gpu: "1"
+                    rdma/ib: 1
+                  requests:
+                    cpu: 32
+                    memory: 512Gi
+                    ephemeral-storage: 64Gi 
+                    nvidia.com/gpu: "1"
+                    rdma/ib: 1
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name:  cuda-ipc-debug-service
+spec:
+    ports:
+        - name: http
+          port: 8080
+          protocol: TCP
+          targetPort: 8080
+    selector:
+        leaderworkerset.sigs.k8s.io/name: cuda-ipc-debug 
+        leaderworkerset.sigs.k8s.io/worker-index: "0"
+    type: ClusterIP
