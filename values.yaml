@@ -26,6 +26,49 @@ spec:
                             values:
                               - H200
 
+              # Mount all /dev/nvidia[0-7] devices
+              volumes:
+                - name: nvidia0
+                  hostPath:
+                    path: /dev/nvidia0
+                    type: CharDevice
+                - name: nvidia1
+                  hostPath:
+                    path: /dev/nvidia1
+                    type: CharDevice
+                - name: nvidia2
+                  hostPath:
+                    path: /dev/nvidia2
+                    type: CharDevice
+                - name: nvidia3
+                  hostPath:
+                    path: /dev/nvidia3
+                    type: CharDevice
+                - name: nvidia4
+                  hostPath:
+                    path: /dev/nvidia4
+                    type: CharDevice
+                - name: nvidia5
+                  hostPath:
+                    path: /dev/nvidia5
+                    type: CharDevice
+                - name: nvidia6
+                  hostPath:
+                    path: /dev/nvidia6
+                    type: CharDevice
+                - name: nvidia7
+                  hostPath:
+                    path: /dev/nvidia7
+                    type: CharDevice
+                - name: nvidiactl
+                  hostPath:
+                    path: /dev/nvidiactl
+                    type: CharDevice
+                - name: nvidia-uvm
+                  hostPath:
+                    path: /dev/nvidia-uvm
+                    type: CharDevice
+
               containers:
               - name: cuda-ipc-worker 
                 image: "ghcr.io/coreweave/nccl-tests:12.9.1-devel-ubuntu22.04-nccl2.27.6-1-1fadb07"
@@ -41,6 +84,8 @@ spec:
                 env:
                   # Needed for GDRCOPY to be used.
                   # See: https://github.com/NVIDIA/nvidia-container-toolkit/releases/tag/v1.15.0
+                  - name: NVIDIA_VISIBLE_DEVICES
+                    value: "all"
                   - name: NVIDIA_GDRCOPY
                     value: "enabled"
                   - name: NVSHMEM_DEBUG
@@ -57,9 +102,15 @@ spec:
                     value: "eth0"
                   - name: NCCL_IB_HCA
                     value: "ibp"
+                  - name: DEVICE_LIST_STRATEGY
+                    value: "volume-mounts"
+                  - name: ACCEPT_NVIDIA_VISIBLE_DEVICES_ENVVAR_WHEN_UNPRIVILEGED 
+                    value: "false"
+                  - name: ACCEPT_NVIDIA_VISIBLE_DEVICES_AS_VOLUME_MOUNTS 
+                    value: "true"
 
                 securityContext:
-                  privileged : true
+                  privileged : true 
                   capabilities:
                     add: 
                     - "IPC_LOCK"
@@ -76,6 +127,31 @@ spec:
                     ephemeral-storage: 64Gi 
                     nvidia.com/gpu: "1"
                     rdma/ib: 1
+
+
+
+                # Mount the host devices into the container
+                volumeMounts:
+                  - name: nvidia0
+                    mountPath: /dev/nvidia0
+                  - name: nvidia1
+                    mountPath: /dev/nvidia1
+                  - name: nvidia2
+                    mountPath: /dev/nvidia2
+                  - name: nvidia3
+                    mountPath: /dev/nvidia3
+                  - name: nvidia4
+                    mountPath: /dev/nvidia4
+                  - name: nvidia5
+                    mountPath: /dev/nvidia5
+                  - name: nvidia6
+                    mountPath: /dev/nvidia6
+                  - name: nvidia7
+                    mountPath: /dev/nvidia7
+                  - name: nvidiactl
+                    mountPath: /dev/nvidiactl
+                  - name: nvidia-uvm
+                    mountPath: /dev/nvidia-uvm
 ---
 apiVersion: v1
 kind: Service
