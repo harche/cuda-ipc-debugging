@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: producer
+spec:
+  serviceAccountName: cuda-ipc-sa
+  hostIPC: true
+  nodeSelector:
+    kubernetes.io/hostname: gpu-node-01
+  containers:
+  - name: producer
+    image: quay.io/<user>/cuda-ipc:latest
+    command: ["/usr/local/bin/producer"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+    securityContext:
+      capabilities:
+        add: ["IPC_LOCK"]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer
+spec:
+  serviceAccountName: cuda-ipc-sa
+  hostIPC: true
+  nodeSelector:
+    kubernetes.io/hostname: gpu-node-01
+  containers:
+  - name: consumer
+    image: quay.io/<user>/cuda-ipc:latest
+    command: ["/usr/local/bin/consumer"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+    securityContext:
+      capabilities:
+        add: ["IPC_LOCK"]
+
