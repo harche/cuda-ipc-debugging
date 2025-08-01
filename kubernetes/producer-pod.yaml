@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: producer
+  labels:
+    app: cuda-ipc-producer
+spec:
+  hostIPC: true
+  hostPID: true
+  nodeSelector:
+    kubernetes.io/hostname: gke-harpatil-cluster-llm-default-pool-ac01aa26-5dfs
+  containers:
+  - name: producer
+    image: quay.io/harpatil/cuda-ipc:latest
+    command: ["/usr/local/bin/producer"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+    securityContext:
+      privileged: true
+      capabilities:
+        add: ["IPC_LOCK"]

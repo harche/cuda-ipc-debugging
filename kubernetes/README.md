@@ -28,18 +28,28 @@ Ensure your Kubernetes cluster has:
 
 ## Deploying Producer and Consumer Pods
 
-Apply `kubernetes/pods.yaml` to start both pods on the same GPU node:
+Deploy the producer and consumer pods in sequence to ensure proper CUDA IPC setup:
 
 ```bash
-kubectl apply -f kubernetes/pods.yaml
+# 1. Start the producer first (creates shared memory and CUDA IPC handle)
+kubectl apply -f kubernetes/producer-pod.yaml
+
+# 2. Wait for producer to be running and ready
+kubectl wait --for=condition=Ready pod/producer --timeout=60s
+
+# 3. Start the consumer (opens shared memory and processes data)
+kubectl apply -f kubernetes/consumer-pod.yaml
 ```
+
+**Important**: The producer must be running before starting the consumer, as the consumer needs to access the shared memory created by the producer.
 
 ## Key Configuration
 
 - `hostIPC: true` is required to share CUDA IPC handles between pods
 - `IPC_LOCK` capability is needed for CUDA IPC operations
-- Both pods must run on the same node (enforced via nodeSelector)
+- Both pods must run on the same GPU node (enforced via nodeSelector)
 - Each pod requests 1 GPU resource
+- Producer creates shared memory, consumer accesses it
 
 ## Monitoring
 
@@ -54,5 +64,7 @@ kubectl logs consumer
 ## Cleanup
 
 ```bash
-kubectl delete -f kubernetes/pods.yaml
+kubectl delete pod producer consumer
+# or
+kubectl delete -f kubernetes/producer-pod.yaml -f kubernetes/consumer-pod.yaml
 ```

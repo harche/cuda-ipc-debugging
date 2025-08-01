@@ -23,6 +23,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <numeric>
+#include <cstdlib>
 
 #include <iostream>
 #include <string>
@@ -35,6 +36,7 @@ typedef struct shmStruct_st
 {
     cudaIpcMemHandle_t   memHandle;
     bool is_finished = false;
+    bool handle_ready = false;
 } shmStruct;
 
 typedef struct sharedMemoryInfo_st {
@@ -127,8 +129,10 @@ void producer() {
 
     // set memory to zero in producer
     checkCudaErrors(cudaMemset(ptr, 0, DATA_SIZE));
-
-    std::cerr<<"Entering wait loop ...\n";
+    
+    // Signal that the handle is ready for consumer
+    shm->handle_ready = true;
+    std::cerr<<"IPC handle ready, entering wait loop ...\n";
     while (!shm->is_finished) {
     }
 
@@ -149,10 +153,18 @@ void consumer(int const id) {
     shmStruct* shm = nullptr;
 
     if (sharedMemoryOpen(LSHM_NAME.c_str(), sizeof(shmStruct), &info) != 0) {
-        printf("Failed to create shared memory slab\n");
+        printf("Failed to open shared memory slab\n");
         exit(EXIT_FAILURE);
     }
     shm = (shmStruct *)info.addr;
+    
+    // Wait for producer to create and signal the IPC handle is ready
+    std::cerr<<"Waiting for IPC handle to be ready...\n";
+    while (!shm->handle_ready) {
+        usleep(1000); // Sleep 1ms
+    }
+    std::cerr<<"IPC handle ready, opening memory handle...\n";
+    
     void* ptr = nullptr;
     checkCudaErrors(
             cudaIpcOpenMemHandle(&ptr, *(cudaIpcMemHandle_t *)&shm->memHandle, cudaIpcMemLazyEnablePeerAccess));
