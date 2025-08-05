@@ -61,10 +61,39 @@ kubectl logs producer
 kubectl logs consumer
 ```
 
+## GPU Debugging and Monitoring
+
+### Running nvidia-smi Commands
+
+A debugging pod is provided to run nvidia-smi commands and inspect GPU topology:
+
+```bash
+# Deploy the GPU driver pod (runs indefinitely)
+kubectl apply -f kubernetes/gpu-driver-pod.yaml
+
+# Wait for the pod to be ready
+kubectl wait --for=condition=ready pod/gpu-driver-pod --timeout=60s
+
+# Execute nvidia-smi commands interactively
+kubectl exec -it gpu-driver-pod -- nvidia-smi
+kubectl exec -it gpu-driver-pod -- nvidia-smi topo -m
+kubectl exec -it gpu-driver-pod -- nvidia-smi topo -p2p r
+kubectl exec -it gpu-driver-pod -- nvidia-smi topo -p2p n
+
+# Or get a shell for extended debugging
+kubectl exec -it gpu-driver-pod -- /bin/bash
+```
+
+The gpu-driver-pod has:
+- Privileged access to see all GPUs on the node
+- Host networking and PID namespace access
+- Direct access to /dev and NVIDIA driver paths
+- Runs indefinitely for interactive debugging
+
 ## Cleanup
 
 ```bash
-kubectl delete pod producer consumer
+kubectl delete pod producer consumer gpu-driver-pod
 # or
-kubectl delete -f kubernetes/producer-pod.yaml -f kubernetes/consumer-pod.yaml
+kubectl delete -f kubernetes/producer-pod.yaml -f kubernetes/consumer-pod.yaml -f kubernetes/gpu-driver-pod.yaml
 ```

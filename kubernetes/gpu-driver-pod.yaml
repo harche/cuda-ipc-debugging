@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-driver-pod
+spec:
+  hostPID: true
+  hostNetwork: true
+  containers:
+  - name: gpu-driver
+    image: nvidia/cuda:11.0.3-runtime-ubuntu20.04
+    command: ["sleep", "infinity"]
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: dev
+      mountPath: /dev
+    - name: nvidia-driver
+      mountPath: /usr/local/nvidia
+      readOnly: true
+  volumes:
+  - name: dev
+    hostPath:
+      path: /dev
+  - name: nvidia-driver
+    hostPath:
+      path: /home/kubernetes/bin/nvidia
+  restartPolicy: Always
+  nodeSelector:
+    cloud.google.com/gke-accelerator: nvidia-tesla-a100
