@@ -12,8 +12,7 @@ The manifests use the pre-built image `quay.io/harpatil/cuda-ipc:latest` which i
 Only build a custom image if you need to modify the CUDA IPC example code:
 
 ```bash
-# from the repository root
-docker build -t your-registry/cuda-ipc:latest -f Dockerfile .
+docker build -t your-registry/cuda-ipc:latest -f Dockerfile ..
 docker push your-registry/cuda-ipc:latest
 ```
 
