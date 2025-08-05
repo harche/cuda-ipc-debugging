@@ -8,10 +8,10 @@ spec:
   hostIPC: true
   hostPID: true
   nodeSelector:
-    kubernetes.io/hostname: gke-harpatil-cluster-llm-default-pool-ac01aa26-5dfs
+    cloud.google.com/gke-accelerator: nvidia-tesla-a100
   containers:
   - name: producer
-    image: quay.io/harpatil/cuda-ipc:latest
+    image: quay.io/harpatil/cuda-ipc:v6
     command: ["/usr/local/bin/producer"]
     resources:
       limits:
