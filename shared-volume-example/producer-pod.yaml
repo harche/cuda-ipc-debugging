@@ -20,20 +20,20 @@ spec:
       #include <stdio.h>
       #include <unistd.h>
       #include <stdlib.h>
-      
+
       int main() {
           void* devPtr;
           cudaIpcMemHandle_t handle;
-          
+
           printf("Producer: Initializing CUDA...\n");
           fflush(stdout);
-          
+
           cudaError_t err = cudaSetDevice(0);
           if (err != cudaSuccess) {
               printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Producer: Allocating GPU memory...\n");
           fflush(stdout);
           err = cudaMalloc(&devPtr, 1024 * 1024); // 1MB
@@ -41,7 +41,7 @@ spec:
               printf("ERROR allocating GPU memory: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Producer: Writing test data to GPU memory...\n");
           fflush(stdout);
           int* hostData = (int*)malloc(1024 * 1024);
@@ -53,7 +53,7 @@ spec:
               printf("ERROR copying data to GPU: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Producer: Creating IPC handle...\n");
           fflush(stdout);
           err = cudaIpcGetMemHandle(&handle, devPtr);
@@ -61,7 +61,7 @@ spec:
               printf("ERROR creating IPC handle: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Producer: Writing handle to shared volume...\n");
           fflush(stdout);
           FILE* f = fopen("/shared/cuda_ipc_handle.dat", "wb");
@@ -71,20 +71,20 @@ spec:
           }
           fwrite(&handle, sizeof(handle), 1, f);
           fclose(f);
-          
+
           printf("Producer: Success! Memory contains values 42, 43, 44, 45, 46...\n");
           printf("Producer: Hanging infinitely to keep GPU memory alive...\n");
           fflush(stdout);
-          
+
           // Hang forever to keep the GPU memory allocated
           while (1) {
               sleep(3600);
           }
-          
+
           return 0;
       }
       EOF
-      
+
       echo "Compiling producer..."
       nvcc /tmp/producer.cu -o /tmp/producer
       echo "Starting producer..."
@@ -99,11 +99,11 @@ spec:
     volumeMounts:
     - name: shared-volume
       mountPath: /shared
-  
+
   volumes:
   - name: shared-volume
     hostPath:
       path: /tmp/cuda-ipc-shared
       type: DirectoryOrCreate
-  
+
   restartPolicy: Never

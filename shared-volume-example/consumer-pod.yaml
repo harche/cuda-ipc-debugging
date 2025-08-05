@@ -16,35 +16,35 @@ spec:
     args:
     - |
       echo "Consumer: Waiting for producer to create handle..."
-      
+
       # Wait for the handle file to be created
       while [ ! -f /shared/cuda_ipc_handle.dat ]; do
           echo "Consumer: Waiting for handle file..."
           sleep 2
       done
-      
+
       echo "Consumer: Handle file found!"
       sleep 2
-      
+
       cat > /tmp/consumer.cu << 'EOF'
       #include <cuda_runtime.h>
       #include <stdio.h>
       #include <unistd.h>
       #include <stdlib.h>
-      
+
       int main() {
           void* devPtr;
           cudaIpcMemHandle_t handle;
-          
+
           printf("Consumer: Initializing CUDA...\n");
           fflush(stdout);
-          
+
           cudaError_t err = cudaSetDevice(0);
           if (err != cudaSuccess) {
               printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Consumer: Reading IPC handle from shared volume...\n");
           fflush(stdout);
           FILE* f = fopen("/shared/cuda_ipc_handle.dat", "rb");
@@ -54,7 +54,7 @@ spec:
           }
           fread(&handle, sizeof(handle), 1, f);
           fclose(f);
-          
+
           printf("Consumer: Opening IPC memory handle...\n");
           fflush(stdout);
           err = cudaIpcOpenMemHandle(&devPtr, handle, cudaIpcMemLazyEnablePeerAccess);
@@ -62,10 +62,10 @@ spec:
               printf("ERROR opening IPC handle: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Consumer: Successfully opened shared GPU memory!\n");
           fflush(stdout);
-          
+
           // Read the data once
           int* hostData = (int*)malloc(1024 * sizeof(int));
           err = cudaMemcpy(hostData, devPtr, 1024 * sizeof(int), cudaMemcpyDeviceToHost);
@@ -73,14 +73,14 @@ spec:
               printf("ERROR reading GPU memory: %s\n", cudaGetErrorString(err));
               return 1;
           }
-          
+
           printf("Consumer: First 10 values from shared memory: ");
           for (int i = 0; i < 10; i++) {
               printf("%d ", hostData[i]);
           }
           printf("\n");
           fflush(stdout);
-          
+
           // Verify expected pattern (index + 42)
           bool correct = true;
           for (int i = 0; i < 1024; i++) {
@@ -89,25 +89,25 @@ spec:
                   break;
               }
           }
-          
+
           if (correct) {
               printf("Consumer: ✓ Data verification PASSED!\n");
           } else {
               printf("Consumer: ✗ Data verification FAILED!\n");
           }
-          
+
           printf("Consumer: Success! Hanging infinitely...\n");
           fflush(stdout);
-          
+
           // Hang forever
           while (1) {
               sleep(3600);
           }
-          
+
           return 0;
       }
       EOF
-      
+
       echo "Compiling consumer..."
       nvcc /tmp/consumer.cu -o /tmp/consumer
       echo "Starting consumer..."
@@ -122,11 +122,11 @@ spec:
     volumeMounts:
     - name: shared-volume
       mountPath: /shared
-  
+
   volumes:
   - name: shared-volume
     hostPath:
       path: /tmp/cuda-ipc-shared
       type: DirectoryOrCreate
-  
+
   restartPolicy: Never
