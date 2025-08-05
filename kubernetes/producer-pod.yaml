@@ -11,7 +11,7 @@ spec:
     cloud.google.com/gke-accelerator: nvidia-tesla-a100
   containers:
   - name: producer
-    image: quay.io/harpatil/cuda-ipc:v6
+    image: quay.io/harpatil/cuda-ipc:latest
     command: ["/usr/local/bin/producer"]
     resources:
       limits:
