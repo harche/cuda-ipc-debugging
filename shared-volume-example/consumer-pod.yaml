@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cuda-ipc-consumer-shared
+  labels:
+    app: cuda-ipc-consumer-shared
+spec:
+  hostIPC: true
+  hostPID: true
+  nodeSelector:
+    cloud.google.com/gke-accelerator: nvidia-tesla-a100
+  containers:
+  - name: consumer
+    image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+    command: ["/bin/bash", "-c"]
+    args:
+    - |
+      echo "Consumer: Waiting for producer to create handle..."
+      
+      # Wait for the handle file to be created
+      while [ ! -f /shared/cuda_ipc_handle.dat ]; do
+          echo "Consumer: Waiting for handle file..."
+          sleep 2
+      done
+      
+      echo "Consumer: Handle file found, waiting 2 more seconds for completion..."
+      sleep 2
+      
+      cat > /tmp/consumer.cu << 'EOF'
+      #include <cuda_runtime.h>
+      #include <stdio.h>
+      
+      int main() {
+          void* devPtr;
+          cudaIpcMemHandle_t handle;
+          
+          printf("Consumer: Reading IPC handle from shared volume...\n");
+          FILE* f = fopen("/shared/cuda_ipc_handle.dat", "rb");
+          if (!f) {
+              printf("ERROR: Handle file not found\n");
+              return 1;
+          }
+          
+          size_t read_size = fread(&handle, sizeof(handle), 1, f);
+          fclose(f);
+          
+          if (read_size != 1) {
+              printf("ERROR: Could not read handle from file\n");
+              return 1;
+          }
+          
+          printf("Consumer: Opening IPC memory handle...\n");
+          cudaError_t err = cudaIpcOpenMemHandle(&devPtr, handle, 
+                                                  cudaIpcMemLazyEnablePeerAccess);
+          
+          if (err != cudaSuccess) {
+              printf("ERROR opening IPC handle: %s\n", cudaGetErrorString(err));
+              printf("This indicates the pods are not sharing the same GPU or IPC namespace!\n");
+              return 1;
+          }
+          
+          printf("Consumer: Successfully opened IPC handle!\n");
+          
+          // Read some data to verify it works
+          int* hostData = (int*)malloc(1024 * sizeof(int));
+          cudaMemcpy(hostData, devPtr, 1024 * sizeof(int), cudaMemcpyDeviceToHost);
+          
+          printf("Consumer: First 10 values from shared memory: ");
+          for (int i = 0; i < 10; i++) {
+              printf("%d ", hostData[i]);
+          }
+          printf("\n");
+          
+          // Verify the pattern
+          bool pattern_correct = true;
+          for (int i = 0; i < 1024; i++) {
+              if (hostData[i] != i) {
+                  pattern_correct = false;
+                  break;
+              }
+          }
+          
+          if (pattern_correct) {
+              printf("Consumer: ✓ Data pattern verification PASSED\n");
+          } else {
+              printf("Consumer: ✗ Data pattern verification FAILED\n");
+          }
+          
+          printf("Consumer: Closing IPC handle...\n");
+          cudaIpcCloseMemHandle(devPtr);
+          
+          free(hostData);
+          printf("Consumer: Success! CUDA IPC via shared volume works.\n");
+          return 0;
+      }
+      EOF
+      
+      echo "Consumer: Compiling CUDA code..."
+      nvcc /tmp/consumer.cu -o /tmp/consumer
+      echo "Consumer: Starting execution..."
+      /tmp/consumer
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+    securityContext:
+      privileged: true
+      capabilities:
+        add: ["IPC_LOCK"]
+    volumeMounts:
+    - name: shared-volume
+      mountPath: /shared
+  
+  volumes:
+  - name: shared-volume
+    hostPath:
+      path: /tmp/cuda-ipc-shared
+      type: DirectoryOrCreate
+  
+  restartPolicy: Never
