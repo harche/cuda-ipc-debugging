@@ -13,7 +13,7 @@ Only build a custom image if you need to modify the CUDA IPC example code:
 
 ```bash
 # from the repository root
-docker build -t your-registry/cuda-ipc:latest -f kubernetes/Dockerfile .
+docker build -t your-registry/cuda-ipc:latest -f Dockerfile .
 docker push your-registry/cuda-ipc:latest
 ```
 
@@ -32,13 +32,13 @@ Deploy the producer and consumer pods in sequence to ensure proper CUDA IPC setu
 
 ```bash
 # 1. Start the producer first (creates shared memory and CUDA IPC handle)
-kubectl apply -f kubernetes/producer-pod.yaml
+kubectl apply -f producer-pod.yaml
 
 # 2. Wait for producer to be running and ready
 kubectl wait --for=condition=Ready pod/producer --timeout=60s
 
 # 3. Start the consumer (opens shared memory and processes data)
-kubectl apply -f kubernetes/consumer-pod.yaml
+kubectl apply -f consumer-pod.yaml
 ```
 
 **Important**: The producer must be running before starting the consumer, as the consumer needs to access the shared memory created by the producer.
@@ -69,7 +69,7 @@ A debugging pod is provided to run nvidia-smi commands and inspect GPU topology:
 
 ```bash
 # Deploy the GPU driver pod (runs indefinitely)
-kubectl apply -f kubernetes/gpu-driver-pod.yaml
+kubectl apply -f gpu-driver-pod.yaml
 
 # Wait for the pod to be ready
 kubectl wait --for=condition=ready pod/gpu-driver-pod --timeout=60s
@@ -95,5 +95,5 @@ The gpu-driver-pod has:
 ```bash
 kubectl delete pod producer consumer gpu-driver-pod
 # or
-kubectl delete -f kubernetes/producer-pod.yaml -f kubernetes/consumer-pod.yaml -f kubernetes/gpu-driver-pod.yaml
+kubectl delete -f producer-pod.yaml -f consumer-pod.yaml -f gpu-driver-pod.yaml
 ```
