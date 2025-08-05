@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cuda-ipc-producer-shared
+  name: cuda-ipc-producer-simple
   labels:
-    app: cuda-ipc-producer-shared
+    app: cuda-ipc-producer-simple
 spec:
   hostIPC: true
   hostPID: true
@@ -19,26 +19,43 @@ spec:
       #include <cuda_runtime.h>
       #include <stdio.h>
       #include <unistd.h>
+      #include <stdlib.h>
       
       int main() {
           void* devPtr;
           cudaIpcMemHandle_t handle;
           
+          printf("Producer: Initializing CUDA...\n");
+          fflush(stdout);
+          
+          cudaError_t err = cudaSetDevice(0);
+          if (err != cudaSuccess) {
+              printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
+              return 1;
+          }
+          
           printf("Producer: Allocating GPU memory...\n");
-          cudaError_t err = cudaMalloc(&devPtr, 1024 * 1024); // 1MB
+          fflush(stdout);
+          err = cudaMalloc(&devPtr, 1024 * 1024); // 1MB
           if (err != cudaSuccess) {
               printf("ERROR allocating GPU memory: %s\n", cudaGetErrorString(err));
               return 1;
           }
           
-          // Initialize memory with some data
+          printf("Producer: Writing test data to GPU memory...\n");
+          fflush(stdout);
           int* hostData = (int*)malloc(1024 * 1024);
           for (int i = 0; i < 256 * 1024; i++) {
-              hostData[i] = i;
+              hostData[i] = i + 42; // Simple pattern: index + 42
           }
-          cudaMemcpy(devPtr, hostData, 1024 * 1024, cudaMemcpyHostToDevice);
+          err = cudaMemcpy(devPtr, hostData, 1024 * 1024, cudaMemcpyHostToDevice);
+          if (err != cudaSuccess) {
+              printf("ERROR copying data to GPU: %s\n", cudaGetErrorString(err));
+              return 1;
+          }
           
           printf("Producer: Creating IPC handle...\n");
+          fflush(stdout);
           err = cudaIpcGetMemHandle(&handle, devPtr);
           if (err != cudaSuccess) {
               printf("ERROR creating IPC handle: %s\n", cudaGetErrorString(err));
@@ -46,6 +63,7 @@ spec:
           }
           
           printf("Producer: Writing handle to shared volume...\n");
+          fflush(stdout);
           FILE* f = fopen("/shared/cuda_ipc_handle.dat", "wb");
           if (!f) {
               printf("ERROR: Could not open handle file for writing\n");
@@ -54,26 +72,22 @@ spec:
           fwrite(&handle, sizeof(handle), 1, f);
           fclose(f);
           
-          // Also write the data size
-          f = fopen("/shared/data_info.txt", "w");
-          fprintf(f, "size=%d\ntype=int\ncount=%d\n", 1024*1024, 256*1024);
-          fclose(f);
+          printf("Producer: Success! Memory contains values 42, 43, 44, 45, 46...\n");
+          printf("Producer: Hanging infinitely to keep GPU memory alive...\n");
+          fflush(stdout);
           
-          printf("Producer: Handle written to /shared/cuda_ipc_handle.dat\n");
-          printf("Producer: Keeping memory alive for 300 seconds...\n");
+          // Hang forever to keep the GPU memory allocated
+          while (1) {
+              sleep(3600);
+          }
           
-          sleep(300); // Keep the memory allocated for 5 minutes
-          
-          cudaFree(devPtr);
-          free(hostData);
-          printf("Producer: Cleanup complete\n");
           return 0;
       }
       EOF
       
-      echo "Producer: Compiling CUDA code..."
+      echo "Compiling producer..."
       nvcc /tmp/producer.cu -o /tmp/producer
-      echo "Producer: Starting execution..."
+      echo "Starting producer..."
       /tmp/producer
     resources:
       limits:

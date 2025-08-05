@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: cuda-ipc-consumer-shared
+  name: cuda-ipc-consumer-simple
   labels:
-    app: cuda-ipc-consumer-shared
+    app: cuda-ipc-consumer-simple
 spec:
   hostIPC: true
   hostPID: true
@@ -23,81 +23,94 @@ spec:
           sleep 2
       done
       
-      echo "Consumer: Handle file found, waiting 2 more seconds for completion..."
+      echo "Consumer: Handle file found!"
       sleep 2
       
       cat > /tmp/consumer.cu << 'EOF'
       #include <cuda_runtime.h>
       #include <stdio.h>
+      #include <unistd.h>
+      #include <stdlib.h>
       
       int main() {
           void* devPtr;
           cudaIpcMemHandle_t handle;
           
+          printf("Consumer: Initializing CUDA...\n");
+          fflush(stdout);
+          
+          cudaError_t err = cudaSetDevice(0);
+          if (err != cudaSuccess) {
+              printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
+              return 1;
+          }
+          
           printf("Consumer: Reading IPC handle from shared volume...\n");
+          fflush(stdout);
           FILE* f = fopen("/shared/cuda_ipc_handle.dat", "rb");
           if (!f) {
               printf("ERROR: Handle file not found\n");
               return 1;
           }
-          
-          size_t read_size = fread(&handle, sizeof(handle), 1, f);
+          fread(&handle, sizeof(handle), 1, f);
           fclose(f);
           
-          if (read_size != 1) {
-              printf("ERROR: Could not read handle from file\n");
-              return 1;
-          }
-          
           printf("Consumer: Opening IPC memory handle...\n");
-          cudaError_t err = cudaIpcOpenMemHandle(&devPtr, handle, 
-                                                  cudaIpcMemLazyEnablePeerAccess);
-          
+          fflush(stdout);
+          err = cudaIpcOpenMemHandle(&devPtr, handle, cudaIpcMemLazyEnablePeerAccess);
           if (err != cudaSuccess) {
               printf("ERROR opening IPC handle: %s\n", cudaGetErrorString(err));
-              printf("This indicates the pods are not sharing the same GPU or IPC namespace!\n");
               return 1;
           }
           
-          printf("Consumer: Successfully opened IPC handle!\n");
+          printf("Consumer: Successfully opened shared GPU memory!\n");
+          fflush(stdout);
           
-          // Read some data to verify it works
+          // Read the data once
           int* hostData = (int*)malloc(1024 * sizeof(int));
-          cudaMemcpy(hostData, devPtr, 1024 * sizeof(int), cudaMemcpyDeviceToHost);
+          err = cudaMemcpy(hostData, devPtr, 1024 * sizeof(int), cudaMemcpyDeviceToHost);
+          if (err != cudaSuccess) {
+              printf("ERROR reading GPU memory: %s\n", cudaGetErrorString(err));
+              return 1;
+          }
           
           printf("Consumer: First 10 values from shared memory: ");
           for (int i = 0; i < 10; i++) {
               printf("%d ", hostData[i]);
           }
           printf("\n");
+          fflush(stdout);
           
-          // Verify the pattern
-          bool pattern_correct = true;
+          // Verify expected pattern (index + 42)
+          bool correct = true;
           for (int i = 0; i < 1024; i++) {
-              if (hostData[i] != i) {
-                  pattern_correct = false;
+              if (hostData[i] != i + 42) {
+                  correct = false;
                   break;
               }
           }
           
-          if (pattern_correct) {
-              printf("Consumer: ✓ Data pattern verification PASSED\n");
+          if (correct) {
+              printf("Consumer: ✓ Data verification PASSED!\n");
           } else {
-              printf("Consumer: ✗ Data pattern verification FAILED\n");
+              printf("Consumer: ✗ Data verification FAILED!\n");
           }
           
-          printf("Consumer: Closing IPC handle...\n");
-          cudaIpcCloseMemHandle(devPtr);
+          printf("Consumer: Success! Hanging infinitely...\n");
+          fflush(stdout);
           
-          free(hostData);
-          printf("Consumer: Success! CUDA IPC via shared volume works.\n");
+          // Hang forever
+          while (1) {
+              sleep(3600);
+          }
+          
           return 0;
       }
       EOF
       
-      echo "Consumer: Compiling CUDA code..."
+      echo "Compiling consumer..."
       nvcc /tmp/consumer.cu -o /tmp/consumer
-      echo "Consumer: Starting execution..."
+      echo "Starting consumer..."
       /tmp/consumer
     resources:
       limits:
