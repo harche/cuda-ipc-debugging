@@ -6,10 +6,9 @@ metadata:
     app: cuda-ipc-concurrent-pod
 spec:
   hostIPC: true
-#   hostPID: true
   shareProcessNamespace: true
   nodeSelector:
-    cloud.google.com/gke-accelerator: nvidia-tesla-a100
+    cloud.google.com/gke-gpu: "true"
 
   # Both containers run concurrently (no initContainers)
   containers:
