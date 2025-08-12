@@ -5,10 +5,10 @@ metadata:
   labels:
     app: cuda-ipc-consumer-simple
 spec:
-  hostIPC: true
+  hostIPC: false 
   hostPID: true
   nodeSelector:
-    cloud.google.com/gke-accelerator: nvidia-tesla-a100
+    cloud.google.com/gke-gpu: "true"
   containers:
   - name: consumer
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
