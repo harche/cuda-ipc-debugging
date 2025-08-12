@@ -5,7 +5,7 @@ metadata:
   labels:
     app: cuda-ipc-consumer-simple
 spec:
-  hostIPC: false 
+  hostIPC: true
   hostPID: true
   nodeSelector:
     cloud.google.com/gke-gpu: "true"

@@ -7,6 +7,7 @@ This directory contains a simple CUDA IPC example using shared volumes to transf
 - [Prerequisites](#prerequisites)
 - [Deploying the Example](#deploying-the-example)
 - [Security Analysis Summary](#security-analysis-summary)
+- [Why Privileged Mode is Required: Technical Deep Dive](#why-privileged-mode-is-required-technical-deep-dive)
 - [Detailed Test Results](#detailed-test-results)
   - [Pod Status with HostIPC, HostPID, and Privileged Enabled](#pod-status-with-hostipc-hostpid-and-privileged-enabled)
   - [Pod Status with HostIPC Disabled Only](#pod-status-with-hostipc-disabled-only)
@@ -62,9 +63,56 @@ kubectl apply -f consumer-pod.yaml
 
 1. **HostIPC is NOT required** for CUDA IPC when using shared volume approach for handle transfer
 2. **HostPID is REQUIRED** for CUDA IPC operations - enables GPU context sharing between processes
-3. **Privileged mode is REQUIRED** for CUDA IPC operations - enables low-level GPU memory operations
+3. **Privileged mode is REQUIRED** for CUDA IPC operations - enables access to all GPU devices
 4. **Minimum security requirements**: `hostPID: true` + `privileged: true`
 5. **Recommended configuration**: Keep all three enabled for maximum compatibility
+
+## Why Privileged Mode is Required: Technical Deep Dive
+
+### The Real Issue: GPU Device Isolation
+
+**Without privileged mode:**
+- Kubernetes NVIDIA device plugin assigns different physical GPUs to each container
+- Producer gets one GPU (e.g., `/dev/nvidia1` → physical GPU at Bus-Id `00000000:00:04.0`)
+- Consumer gets another GPU (e.g., `/dev/nvidia0` → physical GPU at Bus-Id `00000000:00:03.0`)
+- Result: `cudaIpcOpenMemHandle()` fails with "invalid argument"
+
+**With privileged mode:**
+- Both containers can access all GPU devices (`/dev/nvidia0`, `/dev/nvidia1`, etc.)
+- Both containers can access the same physical GPU for IPC operations
+
+### Debugging Evidence
+
+Using `strace` analysis and device inspection, we found:
+
+1. **Device permissions are not the issue** - All NVIDIA devices have 666 permissions (world-readable/writable)
+2. **Capabilities don't solve it** - Tested extensive capabilities (`SYS_ADMIN`, `MKNOD`, `DAC_OVERRIDE`, `SYS_RAWIO`, etc.) without success
+3. **Physical GPU separation** - Non-privileged containers get different physical GPUs assigned by the device plugin
+4. **System call analysis** - `strace` showed failed access to `/dev/nvidia0` with `EPERM` when trying cross-GPU IPC
+
+### Example Evidence
+
+```bash
+# Non-privileged containers see different GPUs:
+Producer:   /dev/nvidia1 (Bus-Id: 00000000:00:04.0)
+Consumer:   /dev/nvidia0 (Bus-Id: 00000000:00:03.0)
+Result:     ERROR opening IPC handle: invalid argument
+
+# Privileged containers see all GPUs:
+Producer:   /dev/nvidia0, /dev/nvidia1 (all GPUs accessible)
+Consumer:   /dev/nvidia0, /dev/nvidia1 (all GPUs accessible)
+Result:     ✓ CUDA IPC works successfully
+```
+
+### Technical Conclusion
+
+**Privileged mode is required because:**
+- It bypasses the NVIDIA device plugin's GPU isolation mechanisms
+- Allows containers to access all available GPU devices
+- Enables both containers to coordinate on the same physical GPU
+- Provides the necessary device access for cross-container GPU memory sharing
+
+This is a **fundamental architectural requirement** for multi-container CUDA IPC in Kubernetes, not a security oversight that can be worked around with specific capabilities or alternative security configurations.
 
 ## Detailed Test Results
 
