@@ -5,35 +5,19 @@ This directory contains a CUDA IPC example using Kubernetes Dynamic Resource All
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Architecture Overview](#architecture-overview)
 - [Deploying the Example](#deploying-the-example)
-- [Key Features](#key-features)
+- [Security Analysis Summary](#security-analysis-summary)
 - [DRA Configuration](#dra-configuration)
 - [Monitoring](#monitoring)
 - [Cleanup](#cleanup)
-- [Differences from Shared Volume Example](#differences-from-shared-volume-example)
 
 ## Prerequisites
 
 Ensure your Kubernetes cluster has:
 - **NVIDIA GPU DRA Driver** installed and configured
 - Nodes with at least 2 NVIDIA GPUs available
-- Container runtime that supports GPU access (containerd/docker with nvidia-container-runtime)
 - Kubernetes 1.31+ with DRA (Dynamic Resource Allocation) feature enabled
 
-## Architecture Overview
-
-This example demonstrates CUDA IPC using Dynamic Resource Allocation (DRA) where:
-- A **ResourceClaim** requests 2 GPUs that can be shared between pods
-- Both **producer** and **consumer** pods reference the same ResourceClaim
-- Both pods can access all 2 GPUs simultaneously
-- CUDA IPC handles are transferred via shared volume between pods
-
-### DRA Benefits
-- **Resource Sharing**: Multiple pods can share the same GPU resources
-- **Fine-grained Control**: Request specific GPU configurations
-- **Kubernetes Native**: Uses standard Kubernetes resource management
-- **Dynamic Allocation**: Resources allocated at pod scheduling time
 
 ## Deploying the Example
 
@@ -55,22 +39,27 @@ kubectl apply -f consumer-pod.yaml
 
 **Important**: The producer must be running before starting the consumer, as the consumer needs to access the shared memory created by the producer.
 
-## Key Features
+## Security Analysis Summary
 
-### Resource Claim Configuration
-- **Namespace**: `cuda-ipc-dra`
-- **ResourceClaim**: `shared-dual-gpus` requesting 2 GPUs
-- **Device Class**: `gpu.nvidia.com`
-- **Sharing**: Both pods reference the same ResourceClaim
+| Configuration | HostIPC | HostPID | Privileged | Status | Error |
+|---------------|---------|---------|------------|--------|-------|
+| Baseline      | ✅      | ✅      | ✅         | ✅ SUCCESS | None |
+| HostIPC Only Disabled | ❌ | ✅ | ✅ | ✅ SUCCESS | None |
+| HostPID Only Disabled | ✅ | ❌ | ✅ | ❌ FAILED | invalid device context |
+| Privileged Only Disabled | ✅ | ✅ | ❌ | ✅ SUCCESS | None |
+| HostIPC + HostPID Disabled | ❌ | ❌ | ✅ | ❌ FAILED | invalid device context |
+| HostIPC + Privileged Disabled | ❌ | ✅ | ❌ | ✅ SUCCESS | None |
+| HostPID + Privileged Disabled | ✅ | ❌ | ❌ | ❌ FAILED | invalid device context |
+| All Disabled | ❌ | ❌ | ❌ | ❌ FAILED | invalid device context |
 
-### Pod Configuration
-Both pods share the following configuration:
-- `hostIPC: true` - Required for CUDA IPC operations
-- `hostPID: true` - Enables process visibility between pods
-- `privileged: true` - Required for GPU access and IPC operations
-- `IPC_LOCK` capability - Needed for CUDA IPC operations
-- **DRA Resource Claims** - Both pods claim access to `shared-dual-gpus`
-- Shared volume at `/tmp/cuda-ipc-shared-dra` on host, mounted to `/shared` in containers
+### Key Findings
+
+1. **HostIPC is NOT required** for CUDA IPC when using shared volume approach for handle transfer
+2. **HostPID is REQUIRED** for CUDA IPC operations - enables GPU context sharing between processes
+3. **Privileged mode is NOT required** with DRA - Dynamic Resource Allocation provides better GPU resource management
+4. **Minimum security requirements**: `hostPID: true` only (privileged can be disabled)
+5. **Recommended configuration**: `hostPID: true` + `privileged: false` for better security
+
 
 ### GPU Visibility
 - Both pods can see and access both GPUs
@@ -135,27 +124,3 @@ kubectl delete -f consumer-pod.yaml
 kubectl delete -f producer-pod.yaml
 kubectl delete -f resource-claim.yaml
 ```
-
-## Differences from Shared Volume Example
-
-### Key Differences
-1. **Resource Management**: Uses DRA instead of traditional `nvidia.com/gpu: 1` limits
-2. **GPU Sharing**: Both pods can access all GPUs through shared ResourceClaim
-3. **Enhanced Visibility**: Code includes GPU enumeration to show all available devices
-4. **Namespace Isolation**: Resources are contained within `cuda-ipc-dra` namespace
-5. **Future-Ready**: Uses Kubernetes native resource allocation mechanisms
-
-### Similarities
-- Same CUDA IPC implementation and handle transfer mechanism
-- Same security requirements (`hostPID`, `privileged`, `IPC_LOCK`)
-- Same shared volume approach for IPC handle transfer
-- Same verification and testing patterns
-
-### Advantages of DRA Approach
-- **Better Resource Utilization**: Multiple pods can share the same physical GPUs
-- **Flexibility**: Can request specific GPU configurations and quantities
-- **Kubernetes Native**: Integrated with Kubernetes resource management
-- **Scalability**: Better support for complex GPU sharing scenarios
-- **Future Compatibility**: Aligns with Kubernetes evolution for device management
-
-This example demonstrates how CUDA IPC can work in modern Kubernetes environments using Dynamic Resource Allocation for more flexible and efficient GPU resource sharing.
