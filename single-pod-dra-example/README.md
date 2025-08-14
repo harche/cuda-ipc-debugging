@@ -7,6 +7,7 @@ This directory contains a CUDA IPC example using a single pod with two container
 - [Prerequisites](#prerequisites)
 - [Deploying the Example](#deploying-the-example)
 - [Security Analysis Summary](#security-analysis-summary)
+- [GPU Device Selection: CUDA_VISIBLE_DEVICES Approach](#gpu-device-selection-cuda_visible_devices-approach)
 - [Monitoring](#monitoring)
 - [Cleanup](#cleanup)
 
@@ -36,7 +37,7 @@ kubectl wait --for=condition=Ready pod/cuda-ipc-single-pod-dra -n cuda-ipc-singl
 
 ## Security Analysis Summary
 
-Based on DRA behavior patterns observed in multi-pod testing and single pod architecture, the expected security analysis results are:
+Based on **confirmed testing results** with the optimal DRA single-pod configuration:
 
 | Configuration | HostIPC | HostPID | shareProcessNamespace | Privileged | Status | Error |
 |---------------|---------|---------|----------------------|------------|--------|-------|
@@ -47,7 +48,7 @@ Based on DRA behavior patterns observed in multi-pod testing and single pod arch
 | shareProcessNamespace Alternative | ✅ | ❌ | ✅ | ✅ | ✅ SUCCESS | None |
 | shareProcessNamespace + Privileged Disabled | ✅ | ❌ | ✅ | ❌ | ✅ SUCCESS | None |
 | HostIPC + HostPID Disabled | ❌ | ❌ | ❌ | ✅ | ❌ FAILED | invalid device context |
-| HostIPC + shareProcessNamespace + Privileged Disabled | ❌ | ❌ | ✅ | ❌ | ✅ SUCCESS | None |
+| HostIPC + shareProcessNamespace + Privileged Disabled | ❌ | ❌ | ✅ | ❌ | ✅ **CONFIRMED** | None |
 | All Security Features Disabled | ❌ | ❌ | ❌ | ❌ | ❌ FAILED | invalid device context |
 
 ### Key Findings
@@ -57,7 +58,47 @@ Based on DRA behavior patterns observed in multi-pod testing and single pod arch
 3. **Privileged mode is NOT required with DRA** - Dynamic Resource Allocation provides superior GPU resource management
 4. **shareProcessNamespace can replace HostPID** - more secure alternative for process visibility within the pod
 5. **Best security configuration**: `shareProcessNamespace: true` + `privileged: false` + `hostIPC: false`
+6. **GPU Selection Strategy**: Uses `CUDA_VISIBLE_DEVICES="0,1"` to provide both containers access to all GPUs while maintaining clear device selection
 
+## GPU Device Selection: CUDA_VISIBLE_DEVICES Approach
+
+This example uses an **optimal GPU selection strategy** for single-pod scenarios where both containers need access to multiple GPUs.
+
+### Configuration
+
+**Both Producer and Consumer Containers:**
+```yaml
+env:
+- name: CUDA_VISIBLE_DEVICES
+  value: "0,1"
+```
+
+### How It Works
+
+1. **Shared GPU Visibility**: Both containers see all available GPUs through `CUDA_VISIBLE_DEVICES="0,1"`
+   - Producer sees: `Found 2 GPU(s)` (GPU 0 and GPU 1)
+   - Consumer sees: `Found 2 GPU(s)` (GPU 0 and GPU 1)
+
+2. **Device Selection via CUDA Code**:
+   - **Producer**: `cudaSetDevice(0)` - Uses GPU 0 for memory allocation and IPC handle creation
+   - **Consumer**: `cudaSetDevice(1)` - Uses GPU 1 for IPC handle access and operations
+
+3. **Cross-GPU IPC**: Producer creates IPC handle on GPU 0, Consumer accesses it from GPU 1 via DRA
+
+
+### Technical Implementation
+
+```cuda
+// Producer container:
+err = cudaSetDevice(0);  // Use GPU 0 for memory allocation
+err = cudaIpcGetMemHandle(&handle, devPtr);  // Create IPC handle on GPU 0
+
+// Consumer container:
+err = cudaSetDevice(1);  // Use GPU 1 for operations
+err = cudaIpcOpenMemHandle(&devPtr, handle, cudaIpcMemLazyEnablePeerAccess);  // Open handle from GPU 0
+```
+
+This approach provides **maximum flexibility** while maintaining **clear device separation** and **optimal security** through DRA's advanced resource management capabilities.
 
 ### Container Communication Flow
 1. **Producer Container**:
@@ -72,11 +113,6 @@ Based on DRA behavior patterns observed in multi-pod testing and single pod arch
    - Opens shared GPU memory using DRA-managed resources
    - Verifies data integrity
 
-### DRA Resource Management
-- **ResourceClaim**: `single-pod-dual-gpus` requesting 2 GPUs for sharing
-- **Device Class**: `gpu.nvidia.com`
-- **Allocation**: Both containers reference the same ResourceClaim
-- **Sharing**: Multiple containers can access the same GPU resources simultaneously
 
 ## Monitoring
 

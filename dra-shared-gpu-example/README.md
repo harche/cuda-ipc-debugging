@@ -8,6 +8,7 @@ This directory contains a CUDA IPC example using Kubernetes Dynamic Resource All
 - [Deploying the Example](#deploying-the-example)
 - [Security Analysis Summary](#security-analysis-summary)
 - [DRA Configuration](#dra-configuration)
+- [GPU Device Selection: CUDA_VISIBLE_DEVICES Approach](#gpu-device-selection-cuda_visible_devices-approach)
 - [Monitoring](#monitoring)
 - [Cleanup](#cleanup)
 
@@ -59,6 +60,7 @@ kubectl apply -f consumer-pod.yaml
 3. **Privileged mode is NOT required** with DRA - Dynamic Resource Allocation provides better GPU resource management
 4. **Minimum security requirements**: `hostPID: true` only (privileged can be disabled)
 5. **Recommended configuration**: `hostPID: true` + `privileged: false` for better security
+6. **GPU Selection Strategy**: Uses `CUDA_VISIBLE_DEVICES` environment variables for cleaner, more maintainable device selection
 
 
 ### GPU Visibility
@@ -93,6 +95,45 @@ resources:
 resourceClaims:
 - name: shared-gpus
   resourceClaimName: shared-dual-gpus
+```
+
+## GPU Device Selection: CUDA_VISIBLE_DEVICES Approach
+
+This example uses an  **GPU selection strategy** via environment variables instead of hardcoded device selection in CUDA code.
+
+### Configuration
+
+**Producer Pod:**
+```yaml
+env:
+- name: CUDA_VISIBLE_DEVICES
+  value: "0"
+```
+
+**Consumer Pod:**
+```yaml
+env:
+- name: CUDA_VISIBLE_DEVICES
+  value: "1"
+```
+
+### How It Works
+
+1. **Producer Container** (`CUDA_VISIBLE_DEVICES=0`):
+   - CUDA runtime filters to show only physical GPU 0
+   - Application sees: `Found 1 GPU(s)` (physical GPU 0 appears as device 0)
+   - Creates IPC handle on physical GPU 0
+
+2. **Consumer Container** (`CUDA_VISIBLE_DEVICES=1`):
+   - CUDA runtime filters to show only physical GPU 1
+   - Application sees: `Found 1 GPU(s)` (physical GPU 1 appears as device 0)
+   - Opens IPC handle from physical GPU 0 (cross-GPU access via DRA)
+
+### Technical Implementation
+
+```cuda
+// Both producer and consumer use identical device selection:
+err = cudaSetDevice(0);  // Always use device 0 (the only visible device)
 ```
 
 ## Monitoring

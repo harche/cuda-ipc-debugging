@@ -12,6 +12,9 @@ spec:
   - name: producer
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     command: ["/bin/bash", "-c"]
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
     args:
     - |
       echo "Producer: Listing available GPUs with nvidia-smi..."
@@ -57,7 +60,7 @@ spec:
               return 1;
           }
 
-          printf("Producer: Using GPU 0 for CUDA operations...\n");
+          printf("Producer: Using GPU 0 (CUDA_VISIBLE_DEVICES filtered) for CUDA operations...\n");
           printf("Producer: Allocating GPU memory on device 0...\n");
           fflush(stdout);
           err = cudaMalloc(&devPtr, 1024 * 1024); // 1MB

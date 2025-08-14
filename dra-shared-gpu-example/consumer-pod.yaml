@@ -12,6 +12,9 @@ spec:
   - name: consumer
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     command: ["/bin/bash", "-c"]
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "1"
     args:
     - |
       echo "Consumer: Waiting for producer to create handle..."
@@ -61,13 +64,13 @@ spec:
           }
           fflush(stdout);
 
-          err = cudaSetDevice(1);
+          err = cudaSetDevice(0);
           if (err != cudaSuccess) {
               printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
               return 1;
           }
 
-          printf("Consumer: Using GPU 1 for CUDA operations...\n");
+          printf("Consumer: Using GPU 0 (CUDA_VISIBLE_DEVICES filtered) for CUDA operations...\n");
 
           printf("Consumer: Reading IPC handle from shared volume...\n");
           fflush(stdout);

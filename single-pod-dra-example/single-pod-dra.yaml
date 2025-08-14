@@ -17,6 +17,9 @@ spec:
   - name: producer
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     command: ["/bin/bash", "-c"]
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0,1"
     args:
     - |
       echo "Producer: Listing available GPUs with nvidia-smi..."
@@ -140,6 +143,9 @@ spec:
   - name: consumer
     image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     command: ["/bin/bash", "-c"]
+    env:
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0,1"
     args:
     - |
       echo "Consumer: Waiting for producer to be ready..."
