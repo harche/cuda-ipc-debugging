@@ -61,11 +61,13 @@ spec:
           }
           fflush(stdout);
 
-          err = cudaSetDevice(0);
+          err = cudaSetDevice(1);
           if (err != cudaSuccess) {
               printf("ERROR setting CUDA device: %s\n", cudaGetErrorString(err));
               return 1;
           }
+
+          printf("Consumer: Using GPU 1 for CUDA operations...\n");
 
           printf("Consumer: Reading IPC handle from shared volume...\n");
           fflush(stdout);

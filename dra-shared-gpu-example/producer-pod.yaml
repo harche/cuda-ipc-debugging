@@ -57,6 +57,7 @@ spec:
               return 1;
           }
 
+          printf("Producer: Using GPU 0 for CUDA operations...\n");
           printf("Producer: Allocating GPU memory on device 0...\n");
           fflush(stdout);
           err = cudaMalloc(&devPtr, 1024 * 1024); // 1MB
